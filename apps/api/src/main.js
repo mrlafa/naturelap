@@ -7,6 +7,7 @@ import morgan from 'morgan';
 
 import routes from './routes/index.js';
 import { errorMiddleware } from './middleware/index.js';
+import { globalRateLimit } from './middleware/global-rate-limit.js';
 import logger from './utils/logger.js';
 
 
@@ -36,12 +37,13 @@ process.on('SIGTERM', async () => {
 
 app.use(helmet());
 app.use(cors({
-	origin: process.env.CORS_ORIGIN,
+	origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
 	credentials: true,
 }));
 app.use(morgan('combined'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(globalRateLimit);
 
 app.use('/', routes());
 

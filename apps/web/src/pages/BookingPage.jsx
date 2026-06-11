@@ -1,205 +1,221 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { CalendarDays, MapPin, Users } from 'lucide-react';
+import { toast } from 'sonner';
 import pb from '@/lib/pocketbaseClient';
-import apiServerClient from '@/lib/apiServerClient';
 import { useAuth } from '@/contexts/AuthContext.jsx';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { formatCurrency } from '@/lib/commerce';
+import { trackEvent } from '@/lib/analytics';
 
 export default function BookingPage() {
   const { hostelId } = useParams();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  
   const [hostel, setHostel] = useState(null);
+  const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
   const [formData, setFormData] = useState({
     checkIn: '',
     checkOut: '',
     guests: 1,
+    roomId: '',
     name: currentUser?.name || '',
-    email: currentUser?.email || '',
-    phone: ''
+    phone: '',
+    paymentMethod: 'cod',
   });
 
   useEffect(() => {
-    const fetchHostel = async () => {
+    const loadStay = async () => {
       try {
-        const record = await pb.collection('hostels').getOne(hostelId, { $autoCancel: false });
-        setHostel(record);
+        const stay = await pb.collection('hostels').getOne(hostelId, { $autoCancel: false });
+        setHostel(stay);
+        const roomResult = await pb.collection('rooms').getList(1, 50, {
+          filter: `hostel_id = "${hostelId}"`,
+          sort: 'price',
+          $autoCancel: false,
+        });
+        const availableRooms = roomResult.items.filter((room) => Number(room.available_rooms) > 0);
+        setRooms(availableRooms);
+        setFormData((current) => ({ ...current, roomId: availableRooms[0]?.id || `stay-${hostelId}` }));
       } catch (error) {
-        toast.error('Failed to load hostel details');
+        console.error(error);
+        toast.error('Failed to load stay details');
         navigate('/hostels');
       } finally {
         setLoading(false);
       }
     };
-    fetchHostel();
+    loadStay();
   }, [hostelId, navigate]);
 
-  const calculateTotal = () => {
-    if (!formData.checkIn || !formData.checkOut || !hostel) return 0;
-    const start = new Date(formData.checkIn);
-    const end = new Date(formData.checkOut);
-    const nights = Math.ceil((end - start) / (1000 * 60 * 60 * 24));
-    return nights > 0 ? nights * hostel.price_per_night : 0;
+  const selectedRoom = rooms.find((room) => room.id === formData.roomId);
+  const nightlyRate = Number(selectedRoom?.price || hostel?.price_per_night || 0);
+  const nights = useMemo(() => {
+    if (!formData.checkIn || !formData.checkOut) return 0;
+    const difference = new Date(formData.checkOut) - new Date(formData.checkIn);
+    return Math.max(0, Math.ceil(difference / 86400000));
+  }, [formData.checkIn, formData.checkOut]);
+  const total = nights * nightlyRate;
+
+  const updateField = (event) => {
+    setFormData((current) => ({ ...current, [event.target.name]: event.target.value }));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const total = calculateTotal();
-    if (total <= 0) return toast.error('Invalid dates selected');
+  const submitBooking = async (event) => {
+    event.preventDefault();
+    if (nights < 1) return toast.error('Check-out must be after check-in');
+    if (selectedRoom && Number(formData.guests) > Number(selectedRoom.capacity)) {
+      return toast.error(`This room allows up to ${selectedRoom.capacity} guests`);
+    }
 
     setSubmitting(true);
     try {
-      // 1. Create pending booking in PB
       const booking = await pb.collection('bookings').create({
         user_id: currentUser.id,
         hostel_id: hostel.id,
-        room_id: 'placeholder_room_id', // Simplified for this demo
+        room_id: formData.roomId,
         check_in: new Date(formData.checkIn).toISOString(),
         check_out: new Date(formData.checkOut).toISOString(),
-        guests: parseInt(formData.guests),
+        guests: Number(formData.guests),
         total_price: total,
-        status: 'pending'
+        status: formData.paymentMethod === 'cod' ? 'confirmed' : 'pending',
       }, { $autoCancel: false });
 
-      // 2. Call Stripe checkout endpoint
-      const response = await apiServerClient.fetch('/stripe/create-checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: total,
-          productName: `Booking at ${hostel.name}`,
-          successUrl: `${window.location.origin}/bookings?success=true`,
-          cancelUrl: `${window.location.origin}/booking/${hostelId}?canceled=true`
-        })
+      await pb.collection('payments').create({
+        user_id: currentUser.id,
+        booking_id: booking.id,
+        provider: formData.paymentMethod,
+        amount: total,
+        currency: 'NPR',
+        status: 'pending',
+        metadata: {
+          stay: hostel.name,
+          guest_name: formData.name,
+          phone: formData.phone,
+        },
+      }, { $autoCancel: false });
+
+      await pb.collection('notifications').create({
+        user_id: currentUser.id,
+        type: 'booking',
+        title: 'Stay reserved',
+        message: `${nights} night${nights === 1 ? '' : 's'} at ${hostel.name} ${formData.paymentMethod === 'cod' ? 'is confirmed' : 'is being held for payment'}.`,
+        action_url: '/bookings',
+        read: false,
+        metadata: { booking_id: booking.id, hostel_id: hostel.id },
+      }, { $autoCancel: false });
+
+      trackEvent('booking_completed', {
+        entityType: 'booking',
+        entityId: booking.id,
+        metadata: { hostel_id: hostel.id, nights, guests: Number(formData.guests), total },
       });
 
-      if (!response.ok) throw new Error('Failed to initialize payment');
-      
-      const data = await response.json();
-      
-      // Update booking with session ID if needed, then redirect
-      window.open(data.url, '_self'); // Use _self to redirect current tab
-      
+      navigate('/confirmation', {
+        replace: true,
+        state: {
+          type: 'booking',
+          reference: booking.id,
+          title: 'Your mountain stay is reserved.',
+          message:
+            formData.paymentMethod === 'cod'
+              ? `We have reserved ${nights} night${nights === 1 ? '' : 's'} at ${hostel.name}.`
+              : `Your dates at ${hostel.name} are held while the selected payment provider is completed.`,
+        },
+      });
     } catch (error) {
       console.error(error);
-      toast.error('Booking failed. Please try again.');
+      toast.error(error.message || 'Booking failed');
+    } finally {
       setSubmitting(false);
     }
   };
 
-  if (loading) return <div className="p-20 text-center">Loading...</div>;
-
-  const total = calculateTotal();
+  if (loading) return <div className="grid min-h-[70vh] place-items-center">Loading stay...</div>;
 
   return (
-    <div className="container mx-auto px-4 py-12 max-w-3xl">
-      <h1 className="text-3xl font-serif font-bold mb-8">Complete your booking</h1>
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div className="md:col-span-2">
-          <Card>
-            <CardHeader>
-              <CardTitle>Guest Details</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Check-in Date</Label>
-                    <Input 
-                      type="date" 
-                      required 
-                      min={new Date().toISOString().split('T')[0]}
-                      value={formData.checkIn}
-                      onChange={e => setFormData({...formData, checkIn: e.target.value})}
-                      className="text-foreground"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Check-out Date</Label>
-                    <Input 
-                      type="date" 
-                      required 
-                      min={formData.checkIn || new Date().toISOString().split('T')[0]}
-                      value={formData.checkOut}
-                      onChange={e => setFormData({...formData, checkOut: e.target.value})}
-                      className="text-foreground"
-                    />
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Number of Guests</Label>
-                  <Input 
-                    type="number" 
-                    min="1" 
-                    required 
-                    value={formData.guests}
-                    onChange={e => setFormData({...formData, guests: e.target.value})}
-                    className="text-foreground"
-                  />
-                </div>
+    <div className="min-h-screen bg-[#f4f2eb] px-4 py-10 md:py-16">
+      <div className="container mx-auto max-w-6xl">
+        <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#7b847d]">Reserve your stay</p>
+        <h1 className="mt-2 text-4xl font-semibold text-[#18392b]">A few details, then the mountains.</h1>
 
-                <div className="space-y-2">
-                  <Label>Full Name</Label>
-                  <Input 
-                    required 
-                    value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="text-foreground"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Phone Number</Label>
-                  <Input 
-                    type="tel" 
-                    required 
-                    value={formData.phone}
-                    onChange={e => setFormData({...formData, phone: e.target.value})}
-                    className="text-foreground"
-                  />
-                </div>
-
-                <Button type="submit" className="w-full mt-6" size="lg" disabled={submitting || total <= 0}>
-                  {submitting ? 'Processing...' : 'Proceed to Payment'}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="md:col-span-1">
-          <Card className="bg-muted/50 border-0">
-            <CardHeader>
-              <CardTitle className="text-lg">Booking Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <h3 className="font-bold">{hostel.name}</h3>
-                <p className="text-sm text-muted-foreground">{hostel.location}</p>
+        <form onSubmit={submitBooking} className="mt-9 grid gap-8 lg:grid-cols-[1fr_390px]">
+          <Card className="rounded-[2rem] border-0 shadow-sm">
+            <CardHeader><CardTitle>Booking details</CardTitle></CardHeader>
+            <CardContent className="grid gap-5 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="checkIn">Check-in</Label>
+                <Input id="checkIn" name="checkIn" type="date" min={new Date().toISOString().split('T')[0]} value={formData.checkIn} onChange={updateField} required />
               </div>
-              <div className="pt-4 border-t space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span>${hostel.price_per_night} x {total > 0 ? total / hostel.price_per_night : 0} nights</span>
-                  <span>${total}</span>
+              <div className="space-y-2">
+                <Label htmlFor="checkOut">Check-out</Label>
+                <Input id="checkOut" name="checkOut" type="date" min={formData.checkIn || new Date().toISOString().split('T')[0]} value={formData.checkOut} onChange={updateField} required />
+              </div>
+
+              {rooms.length > 0 && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Room</Label>
+                  <Select value={formData.roomId} onValueChange={(value) => setFormData((current) => ({ ...current, roomId: value }))}>
+                    <SelectTrigger><SelectValue placeholder="Choose a room" /></SelectTrigger>
+                    <SelectContent>
+                      {rooms.map((room) => (
+                        <SelectItem key={room.id} value={room.id}>
+                          {room.room_type} · {formatCurrency(room.price)} · up to {room.capacity} guests
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex justify-between font-bold pt-2 border-t">
-                  <span>Total</span>
-                  <span>${total}</span>
-                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="guests">Guests</Label>
+                <Input id="guests" name="guests" type="number" min="1" max={selectedRoom?.capacity || 20} value={formData.guests} onChange={updateField} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="name">Lead guest</Label>
+                <Input id="name" name="name" value={formData.name} onChange={updateField} required />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="phone">Phone</Label>
+                <Input id="phone" name="phone" type="tel" value={formData.phone} onChange={updateField} required />
+              </div>
+              <div className="space-y-2">
+                <Label>Payment method</Label>
+                <Select value={formData.paymentMethod} onValueChange={(value) => setFormData((current) => ({ ...current, paymentMethod: value }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cod">Pay at property</SelectItem>
+                    <SelectItem value="esewa">eSewa</SelectItem>
+                    <SelectItem value="khalti">Khalti</SelectItem>
+                    <SelectItem value="stripe">Card / Stripe</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
-        </div>
+
+          <aside className="h-fit rounded-[2rem] bg-[#18392b] p-7 text-white lg:sticky lg:top-24">
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#d5c895]">Your stay</p>
+            <h2 className="mt-3 text-2xl font-semibold">{hostel.name}</h2>
+            <p className="mt-2 flex items-center gap-2 text-sm text-white/65"><MapPin className="h-4 w-4" /> {hostel.location}</p>
+            <div className="mt-7 space-y-3 border-t border-white/20 pt-6 text-sm text-white/70">
+              <div className="flex justify-between"><span className="flex items-center gap-2"><CalendarDays className="h-4 w-4" /> Nights</span><span>{nights}</span></div>
+              <div className="flex justify-between"><span className="flex items-center gap-2"><Users className="h-4 w-4" /> Guests</span><span>{formData.guests}</span></div>
+              <div className="flex justify-between"><span>Nightly rate</span><span>{formatCurrency(nightlyRate)}</span></div>
+            </div>
+            <div className="mt-6 flex justify-between border-t border-white/20 pt-6 text-xl font-bold"><span>Total</span><span>{formatCurrency(total)}</span></div>
+            <Button type="submit" size="lg" disabled={submitting || total <= 0} className="mt-7 w-full rounded-full bg-[#e97845] hover:bg-[#d96636]">
+              {submitting ? 'Reserving...' : 'Confirm booking'}
+            </Button>
+          </aside>
+        </form>
       </div>
     </div>
   );

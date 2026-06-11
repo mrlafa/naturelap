@@ -12,7 +12,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -64,6 +64,24 @@ export default function LoginPage() {
     }
   };
 
+  const handleGoogleLogin = async () => {
+    setLoading(true);
+    try {
+      const authData = await loginWithGoogle();
+      toast.success('Logged in with Google');
+      navigate(authData.record?.role === 'admin' ? '/admin' : (from || '/'), { replace: true });
+    } catch (error) {
+      console.error('Google login error:', error);
+      toast.error(
+        error.message?.includes('provider')
+          ? 'Google login is not configured yet. Add Google OAuth credentials in PocketBase.'
+          : 'Google login could not be completed.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12 bg-muted/30">
       <Card className="w-full max-w-md shadow-lg border-0">
@@ -74,6 +92,12 @@ export default function LoginPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
+          <Button type="button" variant="outline" className="mb-5 w-full py-6" onClick={handleGoogleLogin} disabled={loading}>
+            <span className="mr-3 font-bold text-[#4285F4]">G</span> Continue with Google
+          </Button>
+          <div className="mb-5 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
+            <span className="h-px flex-1 bg-border" /> or use email <span className="h-px flex-1 bg-border" />
+          </div>
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <Label htmlFor="email">Email address</Label>

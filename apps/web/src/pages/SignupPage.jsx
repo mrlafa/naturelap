@@ -15,7 +15,7 @@ export default function SignupPage() {
     passwordConfirm: ''
   });
   const [loading, setLoading] = useState(false);
-  const { signup } = useAuth();
+  const { signup, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -39,6 +39,24 @@ export default function SignupPage() {
     }
   };
 
+  const handleGoogleSignup = async () => {
+    setLoading(true);
+    try {
+      await loginWithGoogle();
+      toast.success('Account connected with Google');
+      navigate('/');
+    } catch (error) {
+      console.error('Google signup error:', error);
+      toast.error(
+        error.message?.includes('provider')
+          ? 'Google signup is not configured yet. Add Google OAuth credentials in PocketBase.'
+          : 'Google signup could not be completed.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
       <Card className="w-full max-w-md shadow-lg">
@@ -47,6 +65,12 @@ export default function SignupPage() {
           <CardDescription>Enter your details to get started</CardDescription>
         </CardHeader>
         <CardContent>
+          <Button type="button" variant="outline" className="mb-4 w-full" onClick={handleGoogleSignup} disabled={loading}>
+            <span className="mr-3 font-bold text-[#4285F4]">G</span> Continue with Google
+          </Button>
+          <div className="mb-4 flex items-center gap-3 text-xs uppercase tracking-wider text-muted-foreground">
+            <span className="h-px flex-1 bg-border" /> or use email <span className="h-px flex-1 bg-border" />
+          </div>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name</Label>

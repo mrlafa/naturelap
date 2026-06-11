@@ -23,25 +23,53 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    // PocketBase automatically saves the token and user model to localStorage via authStore
     const authData = await pb.collection('users').authWithPassword(email, password, { $autoCancel: false });
     setCurrentUser(authData.record);
     return authData;
   };
 
+  const loginWithGoogle = async () => {
+    const authData = await pb.collection('users').authWithOAuth2({
+      provider: 'google',
+      createData: {
+        role: 'user',
+        email_notifications: true,
+        push_notifications: false,
+      },
+    });
+    setCurrentUser(authData.record);
+    return authData;
+  };
+
   const logout = () => {
-    pb.authStore.clear(); // Clears localStorage and token
+    pb.authStore.clear();
     setCurrentUser(null);
   };
 
   const signup = async (data) => {
     const record = await pb.collection('users').create({
       ...data,
-      role: 'user'
+      role: 'user',
+      email_notifications: true,
+      push_notifications: false,
     }, { $autoCancel: false });
     
-    // Automatically log in after successful signup
     await login(data.email, data.password);
+    return record;
+  };
+
+  const refreshUser = async () => {
+    if (!pb.authStore.isValid) return null;
+    const authData = await pb.collection('users').authRefresh({ $autoCancel: false });
+    setCurrentUser(authData.record);
+    return authData.record;
+  };
+
+  const updateProfile = async (data) => {
+    if (!currentUser?.id) throw new Error('You must be logged in to update your profile');
+    const record = await pb.collection('users').update(currentUser.id, data, { $autoCancel: false });
+    pb.authStore.save(pb.authStore.token, record);
+    setCurrentUser(record);
     return record;
   };
 
@@ -49,9 +77,13 @@ export const AuthProvider = ({ children }) => {
     currentUser,
     isAuthenticated: !!currentUser,
     isAdmin: currentUser?.role === 'admin',
+    isStaff: currentUser?.role === 'staff' || currentUser?.role === 'admin',
     login,
+    loginWithGoogle,
     logout,
     signup,
+    refreshUser,
+    updateProfile,
   };
 
   return (

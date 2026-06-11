@@ -1,145 +1,154 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { MapPin, Calendar, Users, Search, Star, Mountain } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRight, MapPin, Mountain, ShoppingBag, Sparkles, Star } from 'lucide-react';
+import { toast } from 'sonner';
 import pb from '@/lib/pocketbaseClient';
+import ProductCard from '@/components/ProductCard';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { formatCurrency } from '@/lib/commerce';
 
 export default function HomePage() {
-  const [featuredHostels, setFeaturedHostels] = useState([]);
-  const navigate = useNavigate();
+  const [stays, setStays] = useState([]);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
-    const fetchHostels = async () => {
-      try {
-        const records = await pb.collection('hostels').getList(1, 4, {
-          sort: '-rating',
-          $autoCancel: false
-        });
-        setFeaturedHostels(records.items);
-      } catch (error) {
-        console.error('Error fetching hostels:', error);
-      }
-    };
-    fetchHostels();
+    Promise.all([
+      pb.collection('hostels').getList(1, 3, { sort: '-rating', $autoCancel: false }),
+      pb.collection('products').getList(1, 4, { sort: '-created', $autoCancel: false }),
+    ])
+      .then(([stayResult, productResult]) => {
+        setStays(stayResult.items);
+        setProducts(productResult.items);
+      })
+      .catch((error) => {
+        console.error(error);
+        toast.error('Some featured content could not be loaded');
+      });
   }, []);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    navigate('/hostels');
-  };
-
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Hero Section */}
-      <section className="relative h-[80vh] min-h-[600px] flex items-center justify-center">
-        <div className="absolute inset-0 z-0">
-          <img 
-            src="https://images.unsplash.com/photo-1655818127479-8736cc5c5ca4" 
-            alt="Himalayan Mountains" 
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-black/40 mix-blend-multiply" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
-        </div>
-        
-        <div className="relative z-10 container mx-auto px-4 text-center">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-white font-serif mb-6 tracking-tight" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
-            Discover Mountain Serenity
-          </h1>
-          <p className="text-lg md:text-xl text-white/90 mb-10 max-w-2xl mx-auto font-medium">
-            Find your perfect Himalayan retreat. Unplug, unwind, and connect with nature.
-          </p>
+    <div className="bg-[#f4f2eb]">
+      <section className="relative min-h-[86vh] overflow-hidden bg-[#18392b]">
+        <img
+          src="https://images.unsplash.com/photo-1544735716-392fe2489ffa"
+          alt="Himalayan mountain valley"
+          className="absolute inset-0 h-full w-full object-cover opacity-55"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#10291f] via-[#18392b]/75 to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#10291f]/70 via-transparent to-transparent" />
 
-          {/* Search Bar */}
-          <Card className="max-w-4xl mx-auto bg-background/95 backdrop-blur shadow-xl border-0">
-            <CardContent className="p-2 md:p-4">
-              <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
-                <div className="flex-1 relative">
-                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                  <Input placeholder="Where to?" className="pl-10 bg-white text-foreground border-0 focus-visible:ring-1" />
-                </div>
-                <div className="flex-1 relative">
-                  <Calendar className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                  <Input type="date" className="pl-10 bg-white text-foreground border-0 focus-visible:ring-1" />
-                </div>
-                <div className="flex-1 relative">
-                  <Users className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
-                  <Input type="number" min="1" placeholder="Guests" className="pl-10 bg-white text-foreground border-0 focus-visible:ring-1" />
-                </div>
-                <Button type="submit" size="lg" className="w-full md:w-auto bg-primary hover:bg-primary/90 text-white">
-                  <Search className="h-5 w-5 mr-2" /> Search
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+        <div className="container relative mx-auto flex min-h-[86vh] items-center px-4 py-24 text-white">
+          <div className="max-w-4xl">
+            <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.3em] text-[#e2d49d]">
+              <Sparkles className="h-4 w-4" /> Find your way outside
+            </p>
+            <h1 className="mt-6 text-5xl font-semibold leading-[0.98] md:text-7xl lg:text-8xl">
+              Stay close.<br />Travel lightly.
+            </h1>
+            <p className="mt-7 max-w-xl text-lg leading-8 text-white/75">
+              Discover mountain stays, local provisions, and field-tested gear for a slower journey through Nepal.
+            </p>
+            <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+              <Button asChild size="lg" className="h-12 rounded-full bg-[#e97845] px-7 text-white hover:bg-[#d96636]">
+                <Link to="/feed">Explore the feed <ArrowRight className="ml-2 h-4 w-4" /></Link>
+              </Button>
+              <Button asChild size="lg" variant="outline" className="h-12 rounded-full border-white/35 bg-white/10 px-7 text-white backdrop-blur hover:bg-white/20 hover:text-white">
+                <Link to="/hostels">Find a stay</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="absolute bottom-7 right-7 hidden rounded-2xl border border-white/20 bg-black/20 p-4 text-sm text-white/75 backdrop-blur md:block">
+          Curated in Kathmandu<br /><strong className="text-white">Made for the long way around</strong>
         </div>
       </section>
 
-      {/* Featured Hostels */}
-      <section className="py-20 bg-background">
+      <section className="container mx-auto px-4 py-20">
+        <div className="grid gap-5 md:grid-cols-3">
+          <PortalCard icon={Sparkles} eyebrow="Watch & discover" title="A vertical feed for your next idea" text="Move between stays and products, save what speaks to you, and act when you are ready." action="/feed" actionLabel="Open feed" />
+          <PortalCard icon={Mountain} eyebrow="Sleep somewhere real" title="Mountain stays with a sense of place" text="Browse hostels, rooms, amenities, dates, and guest-ready booking totals." action="/hostels" actionLabel="Browse stays" />
+          <PortalCard icon={ShoppingBag} eyebrow="Pack thoughtfully" title="Useful goods for the road" text="Local pantry, camp comfort, trail essentials, and weather-ready layers." action="/store" actionLabel="Visit store" />
+        </div>
+      </section>
+
+      <section className="bg-[#fbfaf6] py-20">
         <div className="container mx-auto px-4">
-          <div className="flex justify-between items-end mb-10">
+          <div className="mb-9 flex items-end justify-between gap-5">
             <div>
-              <h2 className="text-3xl font-serif font-bold mb-2">Featured Retreats</h2>
-              <p className="text-muted-foreground">Handpicked stays for your next adventure</p>
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#7a837c]">Stay awhile</p>
+              <h2 className="mt-2 text-4xl font-semibold text-[#18392b]">Places worth waking up in.</h2>
             </div>
-            <Button variant="ghost" asChild className="hidden md:flex">
-              <Link to="/hostels">View all</Link>
-            </Button>
+            <Button asChild variant="ghost" className="hidden sm:inline-flex"><Link to="/hostels">All stays <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredHostels.map((hostel) => (
-              <Link key={hostel.id} to={`/hostels/${hostel.id}`} className="group block">
-                <Card className="overflow-hidden border-0 shadow-sm hover:shadow-xl transition-all duration-300 h-full flex flex-col bg-card">
-                  <div className="aspect-[4/3] relative overflow-hidden bg-muted">
-                    {hostel.images && hostel.images.length > 0 ? (
-                      <img 
-                        src={pb.files.getUrl(hostel, hostel.images[0])} 
-                        alt={hostel.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-secondary/10 text-secondary">
-                        <Mountain className="h-12 w-12 opacity-50" />
-                      </div>
-                    )}
-                    <div className="absolute top-3 right-3 bg-background/90 backdrop-blur px-2 py-1 rounded-md text-sm font-medium flex items-center gap-1">
-                      <Star className="h-3 w-3 fill-accent text-accent" />
-                      {hostel.rating || 'New'}
-                    </div>
+          <div className="grid gap-6 lg:grid-cols-3">
+            {stays.map((stay) => (
+              <Link key={stay.id} to={`/hostels/${stay.id}`} className="group overflow-hidden rounded-[2rem] bg-white shadow-sm">
+                <div className="aspect-[4/3] overflow-hidden bg-[#e5e8e3]">
+                  {stay.images?.length ? (
+                    <img src={pb.files.getUrl(stay, stay.images[0])} alt={stay.name} className="h-full w-full object-cover transition duration-700 group-hover:scale-105" />
+                  ) : (
+                    <div className="grid h-full place-items-center"><Mountain className="h-10 w-10 text-[#8b968f]" /></div>
+                  )}
+                </div>
+                <div className="p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-xl font-semibold text-[#18392b]">{stay.name}</h3>
+                    <span className="flex items-center gap-1 text-sm"><Star className="h-4 w-4 fill-[#e5a33d] text-[#e5a33d]" /> {stay.rating}</span>
                   </div>
-                  <CardContent className="p-5 flex-1 flex flex-col">
-                    <h3 className="font-serif font-bold text-lg mb-1 group-hover:text-primary transition-colors">{hostel.name}</h3>
-                    <p className="text-sm text-muted-foreground flex items-center gap-1 mb-4">
-                      <MapPin className="h-3 w-3" /> {hostel.location}
-                    </p>
-                    <div className="mt-auto pt-4 border-t flex justify-between items-center">
-                      <span className="font-bold text-lg">${hostel.price_per_night}<span className="text-sm font-normal text-muted-foreground">/night</span></span>
-                    </div>
-                  </CardContent>
-                </Card>
+                  <p className="mt-2 flex items-center gap-2 text-sm text-[#748078]"><MapPin className="h-4 w-4" /> {stay.location}</p>
+                  <p className="mt-5 font-bold text-[#18392b]">{formatCurrency(stay.price_per_night)} <span className="text-sm font-normal text-[#7a837d]">/ night</span></p>
+                </div>
               </Link>
             ))}
           </div>
         </div>
       </section>
 
-      {/* CTA Section */}
-      <section className="py-24 bg-secondary text-secondary-foreground relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] mix-blend-overlay"></div>
-        <div className="container mx-auto px-4 text-center relative z-10">
-          <h2 className="text-3xl md:text-4xl font-serif font-bold mb-6">Ready for the Mountains?</h2>
-          <p className="text-lg mb-8 max-w-2xl mx-auto opacity-90">
-            Join thousands of travelers who have found their perfect Himalayan escape with Mangalmaya.
-          </p>
-          <Button size="lg" variant="secondary" className="bg-white text-secondary hover:bg-white/90" asChild>
-            <Link to="/hostels">Explore All Hostels</Link>
+      <section className="container mx-auto px-4 py-20">
+        <div className="mb-9 flex items-end justify-between gap-5">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.25em] text-[#7a837c]">Field shop</p>
+            <h2 className="mt-2 text-4xl font-semibold text-[#18392b]">Pack less. Choose better.</h2>
+          </div>
+          <Button asChild variant="ghost" className="hidden sm:inline-flex"><Link to="/store">Shop everything <ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
+        </div>
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          {products.map((product) => <ProductCard key={product.id} product={product} />)}
+        </div>
+      </section>
+
+      <section className="bg-[#d9cda1] px-4 py-16">
+        <div className="container mx-auto flex flex-col items-start justify-between gap-7 md:flex-row md:items-center">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-wider text-[#4c5c52]">One account, two kinds of journey</p>
+            <h2 className="mt-2 text-3xl font-semibold text-[#18392b]">Keep your bookings, orders, and saved finds together.</h2>
+          </div>
+          <Button asChild size="lg" className="rounded-full bg-[#18392b] px-7">
+            <Link to="/signup">Create an account <ArrowRight className="ml-2 h-4 w-4" /></Link>
           </Button>
         </div>
       </section>
     </div>
+  );
+}
+
+function PortalCard({ icon: Icon, eyebrow, title, text, action, actionLabel }) {
+  return (
+    <Card className="rounded-[2rem] border-0 bg-white shadow-sm">
+      <CardContent className="p-7">
+        <span className="grid h-12 w-12 place-items-center rounded-full bg-[#edf2ed]">
+          <Icon className="h-5 w-5 text-[#18392b]" />
+        </span>
+        <p className="mt-6 text-xs font-bold uppercase tracking-[0.18em] text-[#8a928c]">{eyebrow}</p>
+        <h2 className="mt-3 text-2xl font-semibold leading-tight text-[#18392b]">{title}</h2>
+        <p className="mt-4 leading-7 text-[#6c776e]">{text}</p>
+        <Button asChild variant="ghost" className="mt-5 -ml-3 text-[#18392b]">
+          <Link to={action}>{actionLabel} <ArrowRight className="ml-2 h-4 w-4" /></Link>
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

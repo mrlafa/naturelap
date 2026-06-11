@@ -3,6 +3,9 @@ import React from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import HostelsManagement from '@/components/HostelsManagement.jsx';
 import BookingsManagement from '@/components/BookingsManagement.jsx';
+import ProductsManagement from '@/components/ProductsManagement.jsx';
+import OrdersManagement from '@/components/OrdersManagement.jsx';
+import UsersManagement from '@/components/UsersManagement.jsx';
 import BookingMigrationPanel from '@/components/BookingMigrationPanel.jsx';
 
 export default function AdminDashboard() {
@@ -18,18 +21,33 @@ export default function AdminDashboard() {
       </div>
       
       <Tabs defaultValue="hostels" className="w-full">
-        <TabsList className="mb-8 grid w-full max-w-2xl grid-cols-3">
-          <TabsTrigger value="hostels">Hostels</TabsTrigger>
+        <TabsList className="mb-8 grid h-auto w-full max-w-5xl grid-cols-2 gap-1 sm:grid-cols-3 lg:grid-cols-6">
+          <TabsTrigger value="hostels">Stays</TabsTrigger>
+          <TabsTrigger value="products">Products</TabsTrigger>
+          <TabsTrigger value="orders">Orders</TabsTrigger>
           <TabsTrigger value="bookings">Bookings</TabsTrigger>
+          <TabsTrigger value="users">Users</TabsTrigger>
           <TabsTrigger value="utilities">Utilities</TabsTrigger>
         </TabsList>
         
         <TabsContent value="hostels" className="mt-0 focus-visible:outline-none">
           <HostelsManagement />
         </TabsContent>
+
+        <TabsContent value="products" className="mt-0 focus-visible:outline-none">
+          <ProductsManagement />
+        </TabsContent>
+
+        <TabsContent value="orders" className="mt-0 focus-visible:outline-none">
+          <OrdersManagement />
+        </TabsContent>
         
         <TabsContent value="bookings" className="mt-0 focus-visible:outline-none">
           <BookingsManagement />
+        </TabsContent>
+
+        <TabsContent value="users" className="mt-0 focus-visible:outline-none">
+          <UsersManagement />
         </TabsContent>
 
         <TabsContent value="utilities" className="mt-0 focus-visible:outline-none">
