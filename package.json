@@ -3,10 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --kill-others --raw \"npm run dev --prefix apps/web\" \"npm run dev --prefix apps/api\" \"PB_ENCRYPTION_KEY=naturelap_dev_encryption_key_123 PB_SUPERUSER_EMAIL=admin@naturelap.local PB_SUPERUSER_PASSWORD=naturelap_dev_admin_pw npm run dev --prefix apps/pocketbase\"",
-    "build": "concurrently --raw \"npm run build --prefix apps/web\"",
-    "start": "concurrently --kill-others --raw \"npm run start --prefix apps/api\" \"PB_ENCRYPTION_KEY=naturelap_dev_encryption_key_123 PB_SUPERUSER_EMAIL=admin@naturelap.local PB_SUPERUSER_PASSWORD=naturelap_dev_admin_pw npm run start --prefix apps/pocketbase\"",
-    "lint": "concurrently --raw \"npm run lint --prefix apps/web\" \"npm run lint --prefix apps/api\""
+    "dev": "concurrently --kill-others --raw \"npm --prefix apps/web run dev\" \"npm --prefix apps/api run dev\" \"PB_ENCRYPTION_KEY=naturelap_dev_encryption_key_123 PB_SUPERUSER_EMAIL=admin@naturelap.local PB_SUPERUSER_PASSWORD=naturelap_dev_admin_pw npm --prefix apps/pocketbase run dev\"",
+    "build": "concurrently --raw \"npm --prefix apps/web run build\"",
+    "start": "concurrently --kill-others --raw \"npm --prefix apps/api run start\" \"PB_ENCRYPTION_KEY=naturelap_dev_encryption_key_123 PB_SUPERUSER_EMAIL=admin@naturelap.local PB_SUPERUSER_PASSWORD=naturelap_dev_admin_pw npm --prefix apps/pocketbase run start\"",
+    "lint": "concurrently --raw \"npm --prefix apps/web run lint\" \"npm --prefix apps/api run lint\""
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
